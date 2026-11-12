@@ -46,7 +46,7 @@ async def main() -> None:
                 await handle_update_with_reply(update)
             except Exception:  # noqa: BLE001
                 logger.exception("Ошибка обработки update %s", update_id)
-            marker = update_id  # продвигаем курсор даже при ошибке —避免 эхо-шторма
+            marker = update_id  # продвигаем курсор даже при ошибке — чтобы не зацикливаться на битом событии
 
 
 if __name__ == "__main__":
