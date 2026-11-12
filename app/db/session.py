@@ -1,7 +1,9 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
-# Путь к файлу базы данных (создастся автоматически)
-DATABASE_URL = "sqlite+aiosqlite:///./taskflow.db"
+from app.core.config import settings
+
+# URL берём из настроек (.env): SQLite локально, PostgreSQL в Docker
+DATABASE_URL = settings.DATABASE_URL
 
 # Создаём "движок" — он управляет соединениями с БД
 engine = create_async_engine(
