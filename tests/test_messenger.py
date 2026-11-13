@@ -87,19 +87,28 @@ async def test_logout_unlinks(session):
 
 def test_extract_message_created():
     update = {
-        "update_id": 1,
-        "message_created": {
-            "chat_id": 777,
-            "sender_user_id": 900,
-            "message": {"text": "/tasks"},
-        },
+        "update_type": "message_created",
+        "timestamp": 1700000000000,
+        "chat_id": 777,
+        "user": {"user_id": 900, "first_name": "Тим", "is_bot": False},
+        "message": {"body": {"mid": "m1", "seq": 1, "text": "/tasks"}},
     }
     ev = extract_event(update)
-    assert ev == {"platform": "max", "external_user_id": "900", "chat_id": 777, "text": "/tasks"}
+    assert ev == {
+        "platform": "max",
+        "external_user_id": "900",
+        "chat_id": 777,
+        "text": "/tasks",
+    }
 
 
 def test_extract_bot_started_maps_to_start_command():
-    update = {"update_id": 2, "bot_started": {"user": {"user_id": 900}, "chat_context": {"chat_id": 777}}}
+    update = {
+        "update_type": "bot_started",
+        "timestamp": 1700000000000,
+        "chat_id": 777,
+        "user": {"user_id": 900, "first_name": "Тим", "is_bot": False},
+    }
     ev = extract_event(update)
     assert ev is not None and ev["text"] == "/start"
 
@@ -110,21 +119,26 @@ def test_extract_ignores_unknown_events():
 
 
 async def test_process_update_end_to_end(session):
-    """Фейковый Update MAX → общий обработчик → задача в той же БД."""
+    """Реальный Update MAX → общий обработчик → задача в той же БД."""
     await _make_user(session, "maxuser")
-    upd_login = {"update_id": 10, "message_created": {
-        "chat_id": 1000, "sender_user_id": 888, "message": {"text": "/login maxuser secret123"}}}
-    result = await process_update(session, upd_login)
+
+    def upd(text: str, seq: int) -> dict:
+        return {
+            "update_type": "message_created",
+            "timestamp": 1700000000000 + seq,
+            "chat_id": 1000,
+            "user": {"user_id": 888, "first_name": "Тим", "is_bot": False},
+            "message": {"body": {"mid": f"m{seq}", "seq": seq, "text": text}},
+        }
+
+    result = await process_update(session, upd("/login maxuser secret123", 1))
     assert result is not None
     reply, chat_id = result
-    assert "привязан" in reply and chat_id == 1000
+    assert chat_id == 1000
+    assert "привязан" in reply.lower()
 
-    upd_task = {"update_id": 11, "message_created": {
-        "chat_id": 1000, "sender_user_id": 888, "message": {"text": "/task Из MAX"}}}
-    reply, _ = await process_update(session, upd_task)
-    assert "Создана задача #" in reply
+    reply, _ = await process_update(session, upd("/task Купить молоко", 2))
+    assert "Создана задача" in reply
 
-    upd_list = {"update_id": 12, "message_created": {
-        "chat_id": 1000, "sender_user_id": 888, "message": {"text": "/tasks"}}}
-    reply, _ = await process_update(session, upd_list)
-    assert "Из MAX" in reply
+    reply, _ = await process_update(session, upd("/tasks", 3))
+    assert "Купить молоко" in reply
