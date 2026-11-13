@@ -1,0 +1,20 @@
+ alembic/env.py                                   |  4 [32m++[m[31m--[m
+ alembic/versions/a1b2c3d4e5f6_users_and_tasks.py | 10 [32m+++++[m[31m-----[m
+ alembic/versions/b2c3d4e5f6a7_messenger_links.py | 10 [32m+++++[m[31m-----[m
+ app/db/base.py                                   |  2 [32m+[m[31m-[m
+ app/db/session.py                                |  2 [32m+[m[31m-[m
+ app/main.py                                      |  3 [32m++[m[31m-[m
+ app/models/models.py                             |  7 [32m++++[m[31m---[m
+ app/routers/tasks.py                             |  6 [32m++[m[31m----[m
+ app/schemas/schemas.py                           | 11 [32m+++++[m[31m------[m
+ app/security/security.py                         |  4 [32m++[m[31m--[m
+ app/services/links.py                            |  3 [32m+[m[31m--[m
+ app/services/max_client.py                       | 22 [32m+++++++++++[m[31m-----------[m
+ app/services/max_handlers.py                     |  8 [32m++++[m[31m----[m
+ app/services/messenger.py                        |  3 [32m+[m[31m--[m
+ app/services/tasks.py                            | 17 [32m++++++++[m[31m---------[m
+ app/services/users.py                            |  9 [32m++++[m[31m-----[m
+ emulate_max_update.py                            |  2 [32m+[m[31m-[m
+ run_max_polling.py                               |  2 [32m+[m[31m-[m
+ tests/conftest.py                                |  2 [32m+[m[31m-[m
+ 19 files changed, 61 insertions(+), 66 deletions(-)

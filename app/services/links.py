@@ -4,7 +4,6 @@
 приложения (в отличие от памяти процесса). Один внешний id может быть
 привязан к одному пользователю на платформу.
 """
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,7 +13,7 @@ from app.models.models import MessengerLink, User
 
 async def get_owner_id(
     db: AsyncSession, platform: str, external_user_id: str
-) -> Optional[int]:
+) -> int | None:
     """Кто этот пользователь мессенджера в TaskFlow? None — если не привязан."""
     result = await db.execute(
         select(MessengerLink).where(

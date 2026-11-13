@@ -11,7 +11,6 @@
 Команды: /login <user> <pass>, /task <название>, /tasks, /done <id>,
 /del <id>, /logout, /help.
 """
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -74,7 +73,7 @@ async def handle_message(
         return "Аккаунт отвязан." if unlinked else "Вы и не были привязаны."
 
     # Остальные команды требуют привязки
-    owner_id: Optional[int] = await links_service.get_owner_id(db, platform, external_user_id)
+    owner_id: int | None = await links_service.get_owner_id(db, platform, external_user_id)
     if owner_id is None:
         return NOT_LINKED_TEXT
 

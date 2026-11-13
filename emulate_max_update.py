@@ -100,8 +100,8 @@ async def main() -> None:
                 print(f"<<< [чат {chat_id}] {reply}")
 
         # отмечаем первую созданную задачу выполненной
-        from app.services import tasks as tasks_service
         from app.services import links as links_service
+        from app.services import tasks as tasks_service
 
         owner_id = await links_service.get_owner_id(db, "max", str(EXTERNAL_USER_ID))
         items = await tasks_service.list_tasks(db, owner_id=owner_id, limit=1, offset=0)

@@ -7,7 +7,6 @@
 Изоляция данных: каждая операция принимает owner_id и фильтрует по нему.
 Чужая задача для сервиса неотличима от несуществующей (возвращается None).
 """
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +18,7 @@ async def create_task(
     db: AsyncSession,
     owner_id: int,
     title: str,
-    description: Optional[str] = None,
+    description: str | None = None,
 ) -> Task:
     task = Task(title=title, description=description, owner_id=owner_id)
     db.add(task)
@@ -31,7 +30,7 @@ async def create_task(
 async def list_tasks(
     db: AsyncSession,
     owner_id: int,
-    is_completed: Optional[bool] = None,
+    is_completed: bool | None = None,
     limit: int = 20,
     offset: int = 0,
 ) -> list[Task]:
@@ -43,7 +42,7 @@ async def list_tasks(
     return list(result.scalars().all())
 
 
-async def get_task(db: AsyncSession, owner_id: int, task_id: int) -> Optional[Task]:
+async def get_task(db: AsyncSession, owner_id: int, task_id: int) -> Task | None:
     """Возвращает задачу, только если она принадлежит owner_id."""
     result = await db.execute(
         select(Task).where(Task.id == task_id, Task.owner_id == owner_id)
@@ -55,10 +54,10 @@ async def update_task(
     db: AsyncSession,
     owner_id: int,
     task_id: int,
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    is_completed: Optional[bool] = None,
-) -> Optional[Task]:
+    title: str | None = None,
+    description: str | None = None,
+    is_completed: bool | None = None,
+) -> Task | None:
     task = await get_task(db, owner_id, task_id)
     if task is None:
         return None
@@ -73,7 +72,7 @@ async def update_task(
     return task
 
 
-async def complete_task(db: AsyncSession, owner_id: int, task_id: int) -> Optional[Task]:
+async def complete_task(db: AsyncSession, owner_id: int, task_id: int) -> Task | None:
     return await update_task(db, owner_id, task_id, is_completed=True)
 
 

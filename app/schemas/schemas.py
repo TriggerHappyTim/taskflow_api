@@ -1,4 +1,3 @@
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -47,19 +46,19 @@ class Token(BaseModel):
 class TaskCreate(BaseModel):
     """owner_id НЕ принимается от клиента — владелец берётся из токена."""
     title: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class TaskUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    is_completed: Optional[bool] = None
+    title: str | None = None
+    description: str | None = None
+    is_completed: bool | None = None
 
 
 class TaskResponse(BaseModel):
     id: int
     title: str
-    description: Optional[str]
+    description: str | None
     is_completed: bool
     owner_id: int
 

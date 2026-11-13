@@ -1,0 +1,24 @@
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["alembic/versions", "_backup", "venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "RUF"]
+ignore = ["E501"]  # длину строк не проверяем — код читаемее без переносов
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI намеренно использует вызовы в дефолтах аргументов — это его DI-механизм
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Security",
+    "fastapi.params.Depends",
+    "fastapi.params.Query",
+]

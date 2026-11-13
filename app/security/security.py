@@ -3,7 +3,7 @@
 bcrypt строго 4.0.1 — с более новыми версиями passlib падает
 (module 'bcrypt' has no attribute '__about__').
 """
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -28,7 +28,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_access_token(subject: str | int, expires_minutes: int | None = None) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(
+    expire = datetime.now(UTC) + timedelta(
         minutes=expires_minutes or settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
     payload = {"sub": str(subject), "exp": expire}

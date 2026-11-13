@@ -46,7 +46,7 @@ async def main() -> None:
             logger.info("Событие: %s", update.get("update_type"))
             try:
                 await handle_update_with_reply(update)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("Ошибка обработки события")
 
         # курсор двигает платформа, а не мы

@@ -54,7 +54,7 @@ async def client(db_engine):
 
 
 async def register_and_login(client: AsyncClient, username: str = "alice",
-                             password: str = "secret123", email: str = None):
+                             password: str = "secret123", email: str | None = None):
     """Вспомогательная: регистрация + логин, возвращает (user_json, headers)."""
     email = email or f"{username}@example.com"
     r = await client.post("/auth/register",

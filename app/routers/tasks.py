@@ -3,13 +3,12 @@
 Владелец всегда берётся из токена (get_current_user), изоляция данных
 обеспечивает сервисный слой: чужая задача = 404.
 """
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
-from app.schemas.schemas import TaskCreate, TaskUpdate, TaskResponse
+from app.schemas.schemas import TaskCreate, TaskResponse, TaskUpdate
 from app.security.security import get_current_user
 from app.services import tasks as tasks_service
 
@@ -31,7 +30,7 @@ async def create_task(
 # ===== СПИСОК задач (пагинация + фильтр) =====
 @router.get("/", response_model=list[TaskResponse])
 async def get_tasks(
-    is_completed: Optional[bool] = Query(None, description="Фильтр по статусу"),
+    is_completed: bool | None = Query(None, description="Фильтр по статусу"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -87,4 +86,3 @@ async def delete_task(
     deleted = await tasks_service.delete_task(db, owner_id=current_user.id, task_id=task_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Task not found")
-    return None

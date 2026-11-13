@@ -12,7 +12,7 @@
 Тип события лежит в поле update_type, текст — в message.body.text.
 """
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,7 +25,7 @@ logger = logging.getLogger("taskflow.max")
 PLATFORM = "max"
 
 
-def extract_event(update: dict[str, Any]) -> Optional[dict[str, Any]]:
+def extract_event(update: dict[str, Any]) -> dict[str, Any] | None:
     """Достаёт из Update поля, нужные общему обработчику.
 
     Возвращает None для событий, на которые отвечать не нужно.
@@ -79,7 +79,7 @@ def extract_event(update: dict[str, Any]) -> Optional[dict[str, Any]]:
 
 async def process_update(
     db: AsyncSession, update: dict[str, Any]
-) -> Optional[tuple[str, Any]]:
+) -> tuple[str, Any] | None:
     """Обрабатывает один Update и возвращает (текст ответа, chat_id) или None.
 
     Используется эмулятором и тестами — без обращения к сети.
@@ -110,7 +110,7 @@ async def handle_update_with_reply(update: dict[str, Any]) -> None:
                 external_user_id=event["external_user_id"],
                 text=event["text"],
             )
-        except Exception:  # noqa: BLE001 — не роняем вебхук из-за ошибки логики
+        except Exception:
             logger.exception("Ошибка обработки MAX update: %s", update.get("update_type"))
             return
 

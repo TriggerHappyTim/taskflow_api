@@ -11,7 +11,7 @@
 import asyncio
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -26,8 +26,8 @@ MIN_SEND_INTERVAL = 0.5        # 2 сообщения/сек в один чат
 class MaxAPIError(Exception):
     """Ошибка MAX API. .code — машинночитаемый код ошибки платформы."""
 
-    def __init__(self, message: str, code: Optional[Any] = None,
-                 http_status: Optional[int] = None):
+    def __init__(self, message: str, code: Any | None = None,
+                 http_status: int | None = None):
         super().__init__(message)
         self.code = code
         self.http_status = http_status
@@ -37,7 +37,7 @@ class MaxAPIError(Exception):
 class MaxClient:
     """Тонкая обёртка над REST API MAX на httpx."""
 
-    def __init__(self, token: Optional[str] = None, base_url: Optional[str] = None):
+    def __init__(self, token: str | None = None, base_url: str | None = None):
         self.token = token if token is not None else settings.MAX_BOT_TOKEN
         self.base_url = (base_url or settings.MAX_API_URL).rstrip("/")
         self._locks: dict[str, asyncio.Lock] = {}
@@ -55,8 +55,8 @@ class MaxClient:
         method: str,
         path: str,
         *,
-        params: Optional[dict[str, Any]] = None,
-        json_body: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
         timeout: float = 30.0,
     ) -> dict[str, Any]:
         if not self.configured:
@@ -113,10 +113,10 @@ class MaxClient:
 
     async def send_message(
         self,
-        chat_id: Optional[int | str] = None,
+        chat_id: int | str | None = None,
         text: str = "",
         *,
-        user_id: Optional[int | str] = None,
+        user_id: int | str | None = None,
     ) -> dict[str, Any]:
         """POST /messages — отправка текста.
 
@@ -141,11 +141,11 @@ class MaxClient:
 
     async def get_updates(
         self,
-        marker: Optional[str] = None,
+        marker: str | None = None,
         timeout: int = 30,
         limit: int = 100,
-        types: Optional[list[str]] = None,
-    ) -> tuple[list[dict[str, Any]], Optional[str]]:
+        types: list[str] | None = None,
+    ) -> tuple[list[dict[str, Any]], str | None]:
         """GET /updates — long polling (dev-режим).
 
         Возвращает (список событий, новый marker).

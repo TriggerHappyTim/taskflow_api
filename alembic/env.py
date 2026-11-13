@@ -6,11 +6,11 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from app.core.config import settings
 
 # Импортируем Base и ВСЕ модели, чтобы Alembic их видел
 from app.db.base import Base
-from app.models.models import User, Task, MessengerLink  # noqa: F401
-from app.core.config import settings
+from app.models.models import MessengerLink, Task, User  # noqa: F401
 
 config = context.config
 
