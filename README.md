@@ -1,5 +1,7 @@
 # TaskFlow API
 
+[![CI](https://github.com/TriggerHappyTim/taskflow_api/actions/workflows/ci.yml/badge.svg)](https://github.com/TriggerHappyTim/taskflow_api/actions/workflows/ci.yml)
+
 Бэкенд для управления задачами с JWT-авторизацией и интеграцией мессенджеров.
 Один API обслуживает и HTTP-клиентов (веб/мобилка), и чат-бота в мессенджере MAX.
 
@@ -11,19 +13,22 @@
 - Чат-бот MAX: создание и просмотр задач прямо из мессенджера
 - Привязка аккаунта мессенджера к пользователю — бот помнит вас после перезапуска
 - Асинхронная работа с БД (SQLAlchemy 2.0 async), миграции Alembic
-- Автоматические тесты (pytest)
+- Запуск одной командой через Docker + PostgreSQL
+- Автоматические тесты (pytest) и CI на GitHub Actions
 
 ## Стек
 
 | Слой | Технология |
 |------|-----------|
 | API | FastAPI, Pydantic v2 |
-| БД | SQLAlchemy 2.0 (async) + SQLite (dev) / PostgreSQL (prod) |
+| БД | SQLAlchemy 2.0 (async) + SQLite (dev) / PostgreSQL 16 (prod) |
 | Миграции | Alembic |
 | Авторизация | python-jose (JWT), passlib + bcrypt |
 | Конфиг | pydantic-settings (.env) |
 | HTTP-клиент | httpx |
+| Инфраструктура | Docker, Docker Compose |
 | Тесты | pytest, pytest-asyncio |
+| CI | GitHub Actions |
 
 ## Архитектура
 
@@ -56,12 +61,47 @@ app/
   services/               # users, tasks, links, messenger, max_client, max_handlers
 alembic/                  # миграции
 tests/                    # pytest
+.github/workflows/ci.yml  # CI
+Dockerfile
+docker-compose.yml        # API + PostgreSQL
 emulate_max_update.py     # эмулятор событий MAX (без токена и сети)
 run_max_polling.py        # MAX long polling для разработки
 check_db.py               # инспекция БД
 ```
 
-## Быстрый старт
+## Быстрый старт через Docker (рекомендуется)
+
+Требуется Docker Desktop (или Docker Engine + Compose).
+
+```bash
+git clone https://github.com/TriggerHappyTim/taskflow_api.git
+cd taskflow_api
+
+# 1. Настроить окружение
+cp .env.example .env          # Windows: copy .env.example .env
+# вписать SECRET_KEY в .env (генерация ниже)
+
+# 2. Поднять стек
+docker-compose up --build
+```
+
+Поднимется PostgreSQL 16 и API, миграции применятся автоматически.
+Swagger: **http://127.0.0.1:8000/docs**
+
+Полезные команды:
+
+```bash
+docker-compose up -d                                   # в фоне
+docker-compose logs -f api                             # логи API
+docker-compose down                                    # остановить (данные сохраняются)
+docker-compose exec db psql -U taskflow -d taskflow    # консоль БД
+docker-compose exec db psql -U taskflow -d taskflow -c "\dt"   # список таблиц
+```
+
+> Внутри compose база доступна по имени сервиса `db`, а не `localhost`.
+> `DATABASE_URL` переопределяется в `docker-compose.yml`.
+
+## Быстрый старт локально
 
 Требуется Python 3.12+.
 
@@ -80,7 +120,7 @@ venv\Scripts\activate.bat
 source venv/bin/activate
 
 # 3. Установить зависимости
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 
 # 4. Настроить окружение
 cp .env.example .env        # Windows: copy .env.example .env
@@ -95,6 +135,9 @@ python -m uvicorn app.main:app --reload
 ```
 
 Документация: **http://127.0.0.1:8000/docs** (Swagger UI) и `/redoc`.
+
+> Локально используется SQLite (`taskflow.db`), в Docker — PostgreSQL.
+> Это разные базы, данные между ними не синхронизируются.
 
 ## Переменные окружения
 
@@ -147,38 +190,4 @@ python emulate_max_update.py
 ```
 
 Скрипт генерирует события в реальном формате платформы MAX и прогоняет их через
-адаптер → общий обработчик → сервисы → ту же БД, что использует API.
-Созданные задачи видны в Swagger под пользователем `demo`.
-
-### Подключение реального бота
-
-1. Зарегистрируйтесь на [платформе MAX для партнёров](https://dev.max.ru) и верифицируйте профиль (юрлицо, ИП или самозанятый).
-2. Создайте бота, дождитесь модерации, скопируйте токен: **Чат-боты → ⋮ → Настройки**.
-3. Впишите `MAX_BOT_TOKEN` в `.env`.
-4. Для разработки запустите long polling (публичный URL не нужен):
-   ```bash
-   python run_max_polling.py
-   ```
-5. Для продакшена зарегистрируйте HTTPS-вебхук через `POST /subscriptions`.
-
-Особенности платформы, учтённые в коде:
-- базовый URL `https://platform-api2.max.ru`, авторизация заголовком `Authorization: <token>`
-- получатель сообщения передаётся в query (`chat_id` / `user_id`), тело — `{text, format}`
-- курсор long polling — поле `marker` из ответа, а не id события
-- ошибки могут приходить с HTTP 200 и `success: false` — проверяются и код, и тело
-- лимиты: 30 rps, не более 2 сообщений в секунду в один чат
-
-## Тесты
-
-```bash
-python -m pytest -q
-```
-
-Покрыто: регистрация и вход, защита эндпоинтов, изоляция задач между пользователями,
-пагинация, логика команд бота, разбор реального формата событий MAX.
-
-## Особенности окружения
-
-- **bcrypt зафиксирован на 4.0.1** — более новые версии несовместимы с passlib.
-- **Python 3.14 + SQLAlchemy**: в `Mapped[...]` нельзя использовать `str | None`; nullable-поля описываются как `mapped_column(Text, nullable=True)`.
-- **Windows**: команды запускаются через `python -m ...
+адаптер → общий обработчик → сервисы → ту же БД, что
