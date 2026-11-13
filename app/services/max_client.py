@@ -1,13 +1,16 @@
 """HTTP-клиент API мессенджера MAX (https://dev.max.ru/docs-api/).
 
-Особенности платформы (см. раздел 6 плана):
-- Авторизация заголовком `Authorization: <access_token>` (query-параметры не поддерживаются).
-- Базовый URL: https://platform-api2.max.ru (старый platform-api.max.ru устарел).
-- Часть ошибок приходит с HTTP 200 и телом {"success": false, "code": ...} —
-  поэтому проверяем и код, и тело; ориентироваться надо на code, не на message.
-- Одновременно работает только один тип уведомлений: webhook ИЛИ long polling.
+Особенности платформы:
+- Авторизация заголовком `Authorization: <access_token>` (без префикса Bearer).
+- Базовый URL: https://platform-api2.max.ru
+- POST /messages: получатель в query (chat_id или user_id), тело {text, format}.
+- GET /updates: курсор следующей страницы возвращается в поле `marker`.
+- Часть ошибок приходит с HTTP 200 и телом {"success": false, "code": ...}.
+- Лимиты: до 30 rps, не более 2 сообщений в секунду в один чат.
 """
+import asyncio
 import logging
+import time
 from typing import Any, Optional
 
 import httpx
@@ -16,11 +19,15 @@ from app.core.config import settings
 
 logger = logging.getLogger("taskflow.max")
 
+MAX_TEXT_LIMIT = 4000          # символов в одном сообщении
+MIN_SEND_INTERVAL = 0.5        # 2 сообщения/сек в один чат
+
 
 class MaxAPIError(Exception):
     """Ошибка MAX API. .code — машинночитаемый код ошибки платформы."""
 
-    def __init__(self, message: str, code: Optional[int] = None, http_status: Optional[int] = None):
+    def __init__(self, message: str, code: Optional[Any] = None,
+                 http_status: Optional[int] = None):
         super().__init__(message)
         self.code = code
         self.http_status = http_status
@@ -33,13 +40,14 @@ class MaxClient:
     def __init__(self, token: Optional[str] = None, base_url: Optional[str] = None):
         self.token = token if token is not None else settings.MAX_BOT_TOKEN
         self.base_url = (base_url or settings.MAX_API_URL).rstrip("/")
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._last_sent: dict[str, float] = {}
 
     @property
     def configured(self) -> bool:
         return bool(self.token)
 
     def _headers(self) -> dict[str, str]:
-        # Только заголовок Authorization, без префикса Bearer (так требует MAX)
         return {"Authorization": self.token}
 
     async def _request(
@@ -57,47 +65,79 @@ class MaxClient:
         url = f"{self.base_url}{path}"
         async with httpx.AsyncClient(timeout=timeout) as client:
             try:
-                resp = await client.request(method, url, headers=self._headers(),
-                                            params=params, json=json_body)
+                resp = await client.request(
+                    method, url, headers=self._headers(),
+                    params=params, json=json_body,
+                )
             except httpx.HTTPError as exc:
                 logger.error("MAX network error %s %s: %s", method, url, exc)
                 raise MaxAPIError(f"Сетевая ошибка при запросе к MAX: {exc}") from exc
 
-        # Разбираем тело: часть методов отдаёт HTTP 200 с success:false и полем code
         try:
             data = resp.json()
         except ValueError:
             data = {}
 
         if isinstance(data, dict):
+            # часть методов отдаёт HTTP 200 с success:false
             if data.get("success") is False:
                 code = data.get("code")
                 logger.warning("MAX API error: %s %s code=%s", method, url, code)
                 raise MaxAPIError(f"MAX API вернул ошибку (code={code})",
                                   code=code, http_status=resp.status_code)
             if resp.status_code >= 400:
-                code = data.get("code") if isinstance(data, dict) else None
+                code = data.get("code")
                 raise MaxAPIError(f"MAX API HTTP {resp.status_code} (code={code})",
                                   code=code, http_status=resp.status_code)
-            result = data.get("result", data)
-            return result if isinstance(result, dict) else data
+            return data
+
         if resp.status_code >= 400:
             raise MaxAPIError(f"MAX API HTTP {resp.status_code}", http_status=resp.status_code)
         return {"raw": data}
 
+    async def _throttle(self, key: str) -> None:
+        """Не чаще двух сообщений в секунду в один чат."""
+        lock = self._locks.setdefault(key, asyncio.Lock())
+        async with lock:
+            last = self._last_sent.get(key, 0.0)
+            delay = MIN_SEND_INTERVAL - (time.monotonic() - last)
+            if delay > 0:
+                await asyncio.sleep(delay)
+            self._last_sent[key] = time.monotonic()
+
     # ===== Методы API =====
+
     async def get_me(self) -> dict[str, Any]:
         """GET /me — проверка токена, данные бота."""
         return await self._request("GET", "/me")
 
-    async def send_message(self, chat_id: int | str, text: str) -> dict[str, Any]:
-        """POST /messages — отправка текста в чат."""
-        body = {
-            "chat_id": int(chat_id),
-            "text": text,
-            "markdown": True,
-        }
-        return await self._request("POST", "/messages", json_body=body)
+    async def send_message(
+        self,
+        chat_id: Optional[int | str] = None,
+        text: str = "",
+        *,
+        user_id: Optional[int | str] = None,
+    ) -> dict[str, Any]:
+        """POST /messages — отправка текста.
+
+        Получатель передаётся в query: chat_id (чат/канал) либо user_id (диалог).
+        Тело: {"text": ..., "format": "markdown"}.
+        """
+        if chat_id is None and user_id is None:
+            raise MaxAPIError("Не указан получатель: нужен chat_id или user_id")
+
+        params: dict[str, Any] = {}
+        if chat_id is not None:
+            params["chat_id"] = int(chat_id)
+            throttle_key = f"chat:{chat_id}"
+        else:
+            params["user_id"] = int(user_id)
+            throttle_key = f"user:{user_id}"
+
+        body = {"text": (text or "")[:MAX_TEXT_LIMIT], "format": "markdown"}
+
+        await self._throttle(throttle_key)
+        return await self._request("POST", "/messages", params=params, json_body=body)
 
     async def get_updates(
         self,
@@ -105,22 +145,28 @@ class MaxClient:
         timeout: int = 30,
         limit: int = 100,
         types: Optional[list[str]] = None,
-    ) -> list[dict[str, Any]]:
+    ) -> tuple[list[dict[str, Any]], Optional[str]]:
         """GET /updates — long polling (dev-режим).
 
-        marker — курсор (update_id последнего обработанного события),
-        timeout 0..90 сек, limit 1..1000.
+        Возвращает (список событий, новый marker).
+        marker — курсор из ответа платформы, НЕ id события.
         """
         timeout = max(0, min(90, int(timeout)))
         limit = max(1, min(1000, int(limit)))
+
         params: dict[str, Any] = {"timeout": timeout, "limit": limit}
         if marker:
             params["marker"] = marker
         if types:
             params["types"] = ",".join(types)
+
         data = await self._request("GET", "/updates", params=params, timeout=timeout + 15)
-        updates = data.get("updates", []) if isinstance(data, dict) else []
-        return [u for u in updates if isinstance(u, dict)]
+        updates = data.get("updates") or []
+        new_marker = data.get("marker")
+        return (
+            [u for u in updates if isinstance(u, dict)],
+            str(new_marker) if new_marker is not None else None,
+        )
 
     async def subscribe_webhook(self, url: str) -> dict[str, Any]:
         """POST /subscriptions — регистрация HTTPS-вебхука."""
@@ -135,5 +181,4 @@ class MaxClient:
         return await self._request("DELETE", "/subscriptions")
 
 
-# Экземпляр по умолчанию для приложения (токен подтянется из settings)
 max_client = MaxClient()
