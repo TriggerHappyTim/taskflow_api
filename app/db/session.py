@@ -1,3 +1,5 @@
+from collections.abc import AsyncGenerator
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
@@ -6,10 +8,7 @@ from app.core.config import settings
 DATABASE_URL = settings.DATABASE_URL
 
 # Создаём "движок" — он управляет соединениями с БД
-engine = create_async_engine(
-    DATABASE_URL,
-    echo=False,  # Поставь True, чтобы видеть SQL-запросы в консоли (для отладки)
-)
+engine = create_async_engine(settings.database_url, echo=False)
 
 # Фабрика сессий — через неё будем делать запросы
 AsyncSessionLocal = async_sessionmaker(
@@ -19,7 +18,7 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 # Зависимость FastAPI: даёт сессию БД каждому запросу
-async def get_db():
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         try:
             yield session
